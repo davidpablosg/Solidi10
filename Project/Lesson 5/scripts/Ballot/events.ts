@@ -62,32 +62,51 @@ async function deploy() {
   const ballotContract = await ballotFactory.deploy(
     convertStringArrayToBytes32(proposals)
   );
+  const ballotInterface = new ethers.utils.Interface(
+    ballotJson.abi
+  );
+
   console.log("Awaiting confirmations");
   await ballotContract.deployed();
   console.log("Completed");
   console.log(`Contract deployed at ${ballotContract.address}`);
-  return { ballotContract, provider, signer };
+  return { ballotContract, provider, signer, ballotInterface };
 }
 
 function setListeners(
   ballotContract: ethers.Contract,
-  provider: ethers.providers.BaseProvider
+  provider: ethers.providers.BaseProvider,
+  ballotInterface: ethers.utils.Interface
 ) {
   console.log("Setting listeners on");
   const eventFilter = ballotContract.filters.NewVoter();
-  provider.on(eventFilter, (log) => {
+  provider.on(eventFilter, (log: any) => {
+    const parsedArgs = ballotInterface.parseLog(log).args;
     console.log("New voter");
-    console.log({ log });
+    console.log(parsedArgs.voter);
   });
   const eventFilter2 = ballotContract.filters.Voted();
-  provider.on(eventFilter2, (log) => {
+  provider.on(eventFilter2, async (log) => {
+    const parsedArgs = ballotInterface.parseLog(log).args;
     console.log("New vote cast");
-    console.log({ log });
+    console.log("Winning proposal", parsedArgs.proposal.toNumber());
+    console.log("Votes count", parsedArgs.proposalVotes.toNumber());
+    console.log('----------');
+    const status = await ballotContract.winningProposal();
+    console.log('Current Winning Proposal', status.toNumber());
+    console.log("All proposals");
+    for (let index = 0; index < PROPOSALS.length; index++) {
+      const proposal = await ballotContract.proposals(index);
+      console.log("Name:", ethers.utils.parseBytes32String(proposal.name),"Votes:", proposal.voteCount.toNumber());
+    }
   });
   const eventFilter3 = ballotContract.filters.Delegated();
   provider.on(eventFilter3, (log) => {
+    const parsedArgs = ballotInterface.parseLog(log).args;
     console.log("New vote delegation");
-    console.log({ log });
+    console.log("Final delegation address", parsedArgs.finalDelegate);
+    console.log("Final delegation weight", parsedArgs.finalWeight.toNumber());
+    console.log("Already voted", parsedArgs.voted);
   });
   console.log(`Total of ${provider.listenerCount()} listeners set`);
 }
@@ -155,8 +174,8 @@ async function Populate(
 }
 
 async function main() {
-  const { ballotContract, provider, signer } = await deploy();
-  setListeners(ballotContract, provider);
+  const { ballotContract, provider, signer, ballotInterface } = await deploy();
+  setListeners(ballotContract, provider, ballotInterface);
   await Populate(ballotContract, provider, signer);
 }
 
