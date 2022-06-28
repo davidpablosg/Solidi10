@@ -62,32 +62,28 @@ async function deploy() {
   const ballotContract = await ballotFactory.deploy(
     convertStringArrayToBytes32(proposals)
   );
-  const ballotInterface = new ethers.utils.Interface(
-    ballotJson.abi
-  );
 
   console.log("Awaiting confirmations");
   await ballotContract.deployed();
   console.log("Completed");
   console.log(`Contract deployed at ${ballotContract.address}`);
-  return { ballotContract, provider, signer, ballotInterface };
+  return { ballotContract, provider, signer };
 }
 
 function setListeners(
   ballotContract: ethers.Contract,
   provider: ethers.providers.BaseProvider,
-  ballotInterface: ethers.utils.Interface
 ) {
   console.log("Setting listeners on");
   const eventFilter = ballotContract.filters.NewVoter();
   provider.on(eventFilter, (log: any) => {
-    const parsedArgs = ballotInterface.parseLog(log).args;
+    const parsedArgs = ballotContract.interface.parseLog(log).args;
     console.log("New voter");
     console.log(parsedArgs.voter);
   });
   const eventFilter2 = ballotContract.filters.Voted();
   provider.on(eventFilter2, async (log) => {
-    const parsedArgs = ballotInterface.parseLog(log).args;
+    const parsedArgs = ballotContract.interface.parseLog(log).args;
     console.log("New vote cast");
     console.log("Winning proposal", parsedArgs.proposal.toNumber());
     console.log("Votes count", parsedArgs.proposalVotes.toNumber());
@@ -102,7 +98,7 @@ function setListeners(
   });
   const eventFilter3 = ballotContract.filters.Delegated();
   provider.on(eventFilter3, (log) => {
-    const parsedArgs = ballotInterface.parseLog(log).args;
+    const parsedArgs = ballotContract.interface.parseLog(log).args;
     console.log("New vote delegation");
     console.log("Final delegation address", parsedArgs.finalDelegate);
     console.log("Final delegation weight", parsedArgs.finalWeight.toNumber());
@@ -174,8 +170,8 @@ async function Populate(
 }
 
 async function main() {
-  const { ballotContract, provider, signer, ballotInterface } = await deploy();
-  setListeners(ballotContract, provider, ballotInterface);
+  const { ballotContract, provider, signer } = await deploy();
+  setListeners(ballotContract, provider);
   await Populate(ballotContract, provider, signer);
 }
 
